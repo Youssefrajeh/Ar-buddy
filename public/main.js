@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { XREstimatedLight } from 'three/addons/webxr/XREstimatedLight.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Character } from './character.js';
 import { askBrain } from './brain.js';
 import { Voice } from './voice.js';
@@ -39,16 +40,34 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x000000, 0);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping; // filmic highlights without washing out colours
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap; // soft edges come from shadow.radius
 renderer.xr.enabled = true;
 document.body.prepend(renderer.domElement);
 
-// Default lights (replaced by the real room's light when the phone can estimate it)
+// Reflections: a soft studio "room" so glossy and metal parts have something to reflect
+const pmrem = new THREE.PMREMGenerator(renderer);
+const studioEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = studioEnv;
+scene.environmentIntensity = 0.75;
+
+// Default fill light (replaced by the real room's light when the phone can estimate it)
 const defaultLights = new THREE.Group();
-defaultLights.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.2));
-const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-sun.position.set(0.5, 2, 1);
-defaultLights.add(sun);
+defaultLights.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.35));
 scene.add(defaultLights);
+
+// Key light: always on, casts the robot's soft shadow onto the floor. Follows the robot.
+const sun = new THREE.DirectionalLight(0xfff4e6, 1.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.radius = 6;
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.01;
+Object.assign(sun.shadow.camera, { left: -0.6, right: 0.6, top: 0.6, bottom: -0.6, near: 0.1, far: 5 });
+scene.add(sun, sun.target);
+const SUN_OFFSET = new THREE.Vector3(0.6, 1.8, 0.8);
 
 // Ring that shows where the floor is
 const reticle = new THREE.Mesh(
@@ -221,12 +240,14 @@ async function startAR() {
   xrLight.addEventListener('estimationstart', () => {
     scene.add(xrLight);
     scene.remove(defaultLights);
-    if (xrLight.environment) scene.environment = xrLight.environment;
+    sun.intensity = 0.8; // the real room light does most of the work now
+    if (xrLight.environment) scene.environment = xrLight.environment; // reflect the real room
   });
   xrLight.addEventListener('estimationend', () => {
     scene.remove(xrLight);
     scene.add(defaultLights);
-    scene.environment = null;
+    sun.intensity = 1.6;
+    scene.environment = studioEnv;
   });
 
   // Tap on screen = "select" from a ray that starts at the phone
@@ -263,7 +284,8 @@ function onSessionEnd() {
   reticle.visible = false;
   if (xrLight) scene.remove(xrLight);
   scene.add(defaultLights);
-  scene.environment = null;
+  sun.intensity = 1.6;
+  scene.environment = studioEnv;
   leaveHud();
 }
 
@@ -391,7 +413,12 @@ renderer.setAnimationLoop((time, frame) => {
     }
   }
 
-  if (buddy?.placed) buddy.update(dt, getViewerPosition(tmpVec));
+  if (buddy?.placed) {
+    buddy.update(dt, getViewerPosition(tmpVec));
+    // keep the shadow light centred on the robot
+    sun.target.position.copy(buddy.root.position);
+    sun.position.copy(buddy.root.position).add(SUN_OFFSET);
+  }
   renderer.render(scene, camera);
 });
 
