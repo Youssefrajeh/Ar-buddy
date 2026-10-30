@@ -1,0 +1,13 @@
+{
+  "name": "ar-buddy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebXR AR character that listens to you and talks back",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

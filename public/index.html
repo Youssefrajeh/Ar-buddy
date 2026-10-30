@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0b0f1a" />
+  <title>AR Buddy</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./lib/three/three.module.js",
+        "three/addons/": "./lib/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Camera feed for "preview mode" (devices without WebXR AR, e.g. iPhone) -->
+  <video id="camera" playsinline muted autoplay></video>
+
+  <!-- Everything inside #overlay stays visible on top of the AR view (WebXR dom-overlay) -->
+  <div id="overlay">
+    <section id="start-screen">
+      <div class="card">
+        <div class="logo">🤖</div>
+        <h1>AR Buddy</h1>
+        <p>A little robot that stands in your room, listens to you and talks back.</p>
+        <button id="start-ar" class="primary" hidden>Start AR</button>
+        <button id="start-preview" class="secondary" hidden>Start camera preview</button>
+        <p id="support-note" class="note">Checking what your device supports…</p>
+      </div>
+    </section>
+
+    <div id="hud" hidden>
+      <div id="top-bar">
+        <span id="status">Point your phone at the floor</span>
+        <button id="exit" class="icon" aria-label="Exit">✕</button>
+      </div>
+
+      <div id="bubble" hidden></div>
+
+      <div id="bottom-bar">
+        <form id="text-form" autocomplete="off">
+          <input id="text-input" type="text" placeholder="Type to your buddy…" enterkeyhint="send" />
+        </form>
+        <button id="mic" class="mic" aria-label="Talk">🎤</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
