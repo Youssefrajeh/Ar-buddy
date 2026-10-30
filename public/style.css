@@ -35,7 +35,6 @@ body.preview { background: #000; }
   pointer-events: auto;
 }
 .card { max-width: 360px; text-align: center; }
-.logo { font-size: 64px; }
 h1 { margin: 8px 0; font-size: 32px; }
 .card p { color: #b9c2d8; line-height: 1.45; }
 .note { font-size: 13px; }
@@ -62,7 +61,8 @@ button {
 }
 .icon {
   width: 40px; height: 40px; padding: 0; margin: 0;
-  background: #000a; color: #fff; font-size: 18px;
+  background: #000a; color: #fff;
+  display: grid; place-items: center;
 }
 
 #bubble {
@@ -89,8 +89,9 @@ button {
 }
 .mic {
   width: 64px; height: 64px; padding: 0; margin: 0;
-  font-size: 28px; background: #4f7cff; color: #fff;
+  background: #4f7cff; color: #fff;
   flex-shrink: 0;
+  display: grid; place-items: center;
   box-shadow: 0 4px 18px #4f7cff88;
 }
 .mic.listening { background: #ff4f6d; animation: pulse 1s infinite; }

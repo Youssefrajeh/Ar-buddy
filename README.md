@@ -1,4 +1,4 @@
-# AR Buddy 🤖
+# AR Buddy
 
 A web app where a little robot appears **on your real floor** through your phone camera.
 You can **talk to it**, it **answers out loud**, and it **acts it out**: it waves, nods, dances, sits, jumps, plays dead, or walks over to you.
@@ -27,7 +27,7 @@ robot ◄── speaks the reply (speechSynthesis) + plays the animation + chang
 - **Tap the floor** → the robot pops in and waves
 - **Tap the floor somewhere else** → it walks there
 - **Tap the robot** → it jumps ("Boop!")
-- **Tap 🎤 and talk** (or type) → it answers out loud and does an action:
+- **Tap the mic and talk** (or type) → it answers out loud and does an action:
   `wave · yes · no · thumbsup · jump · punch · fall (play dead) · dance · sit · idle · come (walks to you)`
 - It always **turns to face you** as you walk around it
 
@@ -35,7 +35,7 @@ robot ◄── speaks the reply (speechSynthesis) + plays the animation + chang
 
 | Device | Mode |
 |---|---|
-| Android phone with Chrome + ARCore ("Google Play Services for AR") | ✅ **Full AR**: robot stands on your real floor |
+| Android phone with Chrome + ARCore ("Google Play Services for AR") | **Full AR**: robot stands on your real floor |
 | iPhone / iPad (Safari doesn't support WebXR AR) | Camera **preview mode**: robot over the camera feed, no floor tracking |
 | Desktop | Preview mode (webcam if available) |
 
@@ -79,7 +79,7 @@ Or push to GitHub and import the repo in the Vercel dashboard, then add `ANTHROP
 
 Optional env var: `ANTHROPIC_MODEL` (default `claude-haiku-5-5`, which is fast and cheap, good for voice).
 
-> ⚠️ The `/api/chat` endpoint is public once deployed, so anyone with the link uses your API key.
+> **Note:** The `/api/chat` endpoint is public once deployed, so anyone with the link uses your API key.
 > It already limits message length, history and reply size. Before sharing widely, add a spending limit on your API account, or rate limiting (e.g. Vercel KV / Upstash).
 
 ## Ideas for next steps

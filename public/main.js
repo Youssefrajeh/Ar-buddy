@@ -148,7 +148,7 @@ ui.mic.addEventListener('click', () => {
     onResult: (text) => talkToBuddy(text),
     onEnd: () => {
       ui.mic.classList.remove('listening');
-      setStatus(buddy?.placed ? 'Tap 🎤 and talk to your buddy' : 'Tap the floor to place your buddy');
+      setStatus(buddy?.placed ? 'Tap the mic and talk to your buddy' : 'Tap the floor to place your buddy');
     },
     onError: (err) => setStatus(err === 'not-allowed' ? 'Microphone permission denied' : 'Didn’t catch that, try again'),
   });
@@ -246,7 +246,7 @@ async function startAR() {
       buddy.perform('wave');
       showBubble(hello);
       voice.speak(hello);
-      setStatus('Tap 🎤 and talk to your buddy');
+      setStatus('Tap the mic and talk to your buddy');
     } else {
       buddy.walkToward(spot, 0); // tap somewhere else and it walks there
     }
@@ -353,7 +353,7 @@ async function checkSupport() {
   ui.startPreview.hidden = false;
   if (arOK) {
     ui.startAR.hidden = false;
-    ui.supportNote.textContent = 'Full AR is supported 🎉 Your buddy will stand on your real floor.';
+    ui.supportNote.textContent = 'Full AR is supported. Your buddy will stand on your real floor.';
   } else if (!window.isSecureContext) {
     ui.supportNote.textContent = 'Open this page over HTTPS to use the camera and AR.';
   } else {
