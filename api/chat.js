@@ -2,10 +2,13 @@
 // Body: { messages: [{ role: 'user'|'assistant', content }], lang }
 // Returns: { say, action, expression }
 //
-// Needs the environment variable ANTHROPIC_API_KEY.
-// Optional: ANTHROPIC_MODEL (default below).
+// AI provider (first key found wins):
+//   GEMINI_API_KEY     -> Google Gemini (free tier, key from aistudio.google.com)
+//   ANTHROPIC_API_KEY  -> Anthropic (optional, paid)
+// Optional: GEMINI_MODEL (default below), ANTHROPIC_MODEL
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
 
 const ACTIONS = ['none', 'wave', 'yes', 'no', 'thumbsup', 'jump', 'punch', 'fall', 'dance', 'sit', 'idle', 'come'];
 const EXPRESSIONS = ['neutral', 'happy', 'sad', 'angry', 'surprised'];
@@ -17,7 +20,7 @@ Reply ONLY with a JSON object, no other text:
 {"say": "<what you say>", "action": "<one action>", "expression": "<one expression>"}
 
 Rules:
-- "say": 1–2 short spoken sentences (under 35 words). Warm, fun, simple words. No emojis, no markdown.
+- "say": 1-2 short spoken sentences (under 35 words). Warm, fun, simple words. No emojis, no markdown.
 - Reply in the same language the user speaks.
 - "action" must be one of: ${ACTIONS.join(', ')}.
   wave = greet/bye, yes = nod/agree, no = shake head/disagree, thumbsup = praise,
@@ -33,10 +36,11 @@ export default async function handler(req, res) {
     return send(res, { error: 'POST only' });
   }
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!geminiKey && !anthropicKey) {
     res.statusCode = 503;
-    return send(res, { error: 'ANTHROPIC_API_KEY is not set' });
+    return send(res, { error: 'No AI key set (GEMINI_API_KEY)' });
   }
 
   const body = typeof req.body === 'string' ? safeJSON(req.body) : req.body || {};
@@ -45,37 +49,67 @@ export default async function handler(req, res) {
     res.statusCode = 400;
     return send(res, { error: 'messages required' });
   }
+  const system = SYSTEM + (body.lang ? `\nThe user's device language is ${String(body.lang).slice(0, 12)}.` : '');
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 200,
-        system: SYSTEM + (body.lang ? `\nThe user's device language is ${String(body.lang).slice(0, 12)}.` : ''),
-        messages,
-      }),
-    });
-
-    if (!r.ok) {
-      console.error('Anthropic error', r.status, await r.text());
-      res.statusCode = 502;
-      return send(res, { error: 'AI request failed' });
-    }
-
-    const data = await r.json();
-    const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+    const text = geminiKey
+      ? await askGemini(geminiKey, system, messages)
+      : await askAnthropic(anthropicKey, system, messages);
     return send(res, parseReply(text));
   } catch (err) {
-    console.error(err);
-    res.statusCode = 500;
-    return send(res, { error: 'Server error' });
+    console.error(err.message);
+    // 429 = free-tier limit reached; the app falls back to its offline brain
+    res.statusCode = err.status === 429 ? 429 : 502;
+    return send(res, { error: 'AI request failed' });
   }
+}
+
+// ----------------------------------------------------------------- Gemini
+async function askGemini(key, system, messages) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: messages.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.9,
+        maxOutputTokens: 1024,
+      },
+    }),
+  });
+  if (!r.ok) throw httpError('Gemini', r.status, await r.text());
+  const data = await r.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  return parts.filter((p) => p.text && !p.thought).map((p) => p.text).join('');
+}
+
+// ----------------------------------------------------------------- Anthropic
+async function askAnthropic(key, system, messages) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 200, system, messages }),
+  });
+  if (!r.ok) throw httpError('Anthropic', r.status, await r.text());
+  const data = await r.json();
+  return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+}
+
+// ----------------------------------------------------------------- helpers
+function httpError(provider, status, detail) {
+  const err = new Error(`${provider} error ${status}: ${detail.slice(0, 300)}`);
+  err.status = status;
+  return err;
 }
 
 // Keep only the last turns, short text, alternating roles starting with 'user'
@@ -96,9 +130,9 @@ function sanitize(list) {
 function parseReply(text) {
   const match = text.match(/\{[\s\S]*\}/);
   const obj = match ? safeJSON(match[0]) : null;
-  if (!obj) return { say: text.trim().slice(0, 300) || '…', action: 'none', expression: 'neutral' };
+  if (!obj) return { say: text.trim().slice(0, 300) || '...', action: 'none', expression: 'neutral' };
   return {
-    say: String(obj.say || '…').slice(0, 300),
+    say: String(obj.say || '...').slice(0, 300),
     action: ACTIONS.includes(obj.action) ? obj.action : 'none',
     expression: EXPRESSIONS.includes(obj.expression) ? obj.expression : 'neutral',
   };

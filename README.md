@@ -20,7 +20,7 @@ robot ◄── speaks the reply (speechSynthesis) + plays the animation + chang
 | Character | `public/character.js` | Loads the robot, animations, walking, turning to face you, facial expressions, talking head-bob |
 | Voice | `public/voice.js` | Listening (speech recognition) and speaking (text-to-speech) |
 | Brain (client) | `public/brain.js` | Calls the backend; falls back to an **offline brain** (keyword rules) if no AI is set up |
-| Brain (server) | `api/chat.js` | Keeps the API key secret, asks the AI for a short reply + one action + one expression as JSON |
+| Brain (server) | `api/chat.js` | Keeps the API key secret, asks Google Gemini for a short reply + one action + one expression as JSON |
 | Local server | `dev-server.js` | Serves the site and the API locally with zero dependencies |
 
 ### What you can do
@@ -49,8 +49,8 @@ Needs Node 18+. There's nothing to install.
 # without AI (offline brain: dance / jump / sit / come here / hello ...)
 node dev-server.js
 
-# with AI
-ANTHROPIC_API_KEY=sk-ant-... node dev-server.js
+# with AI (Google Gemini free tier)
+GEMINI_API_KEY=your-key node dev-server.js
 ```
 
 Open http://localhost:3000.
@@ -70,17 +70,24 @@ The camera, mic and AR only work on **HTTPS** or **localhost**. The easiest way:
 ```bash
 npm i -g vercel
 vercel          # first time: link/create the project
-vercel env add ANTHROPIC_API_KEY   # paste your key (Production)
+vercel env add GEMINI_API_KEY   # paste your key (Production)
 vercel --prod
 ```
 
-Or push to GitHub and import the repo in the Vercel dashboard, then add `ANTHROPIC_API_KEY` under **Settings → Environment Variables**.
+Or push to GitHub and import the repo in the Vercel dashboard, then add `GEMINI_API_KEY` under **Settings → Environment Variables**.
 `vercel.json` already tells Vercel to serve the `public/` folder; `api/chat.js` becomes the `/api/chat` function automatically.
 
-Optional env var: `ANTHROPIC_MODEL` (default `claude-haiku-5-5`, which is fast and cheap, good for voice).
+### Getting a free AI key
+1. Go to https://aistudio.google.com and sign in with a Google account
+2. Click **Get API key** → **Create API key** (no credit card needed)
+3. Add it to Vercel as `GEMINI_API_KEY` and redeploy
 
-> **Note:** The `/api/chat` endpoint is public once deployed, so anyone with the link uses your API key.
-> It already limits message length, history and reply size. Before sharing widely, add a spending limit on your API account, or rate limiting (e.g. Vercel KV / Upstash).
+Optional env var: `GEMINI_MODEL` (default `gemini-flash-latest`). The free tier is rate-limited (your exact limits are shown in AI Studio); when the limit is hit, the robot automatically falls back to its offline brain. Note: Google may use free-tier requests to improve its products.
+
+The backend also still supports `ANTHROPIC_API_KEY` (paid) if you prefer it; if both keys are set, Gemini is used.
+
+> **Note:** The `/api/chat` endpoint is public once deployed, so anyone with the link uses your key's free quota.
+> It already limits message length, history and reply size. Before sharing widely, consider rate limiting (e.g. Vercel KV / Upstash).
 
 ## Ideas for next steps
 - **Your own character**: any rigged `.glb` with animations works (e.g. from [Mixamo](https://www.mixamo.com/)). Change the file name in `main.js` and the clip names in `character.js`.

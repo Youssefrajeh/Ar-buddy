@@ -1,5 +1,5 @@
 // Local dev server: serves /public and runs /api/chat, no extra packages needed.
-//   ANTHROPIC_API_KEY=sk-ant-... node dev-server.js
+//   GEMINI_API_KEY=your-key node dev-server.js
 // Then open http://localhost:3000 (see README for testing on your phone).
 
 import http from 'node:http';
