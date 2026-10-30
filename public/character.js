@@ -38,7 +38,10 @@ export class Character {
     this.model.scale.setScalar(s);
     this.model.position.y = -box.min.y * s;
 
+    upgradeLook(this.model);
+
     this.root.add(makeBlobShadow());
+    this.root.add(makeShadowCatcher());
 
     // Invisible box used for "did the user tap the robot?" (easier to hit than thin limbs)
     this.hitBox = new THREE.Mesh(
@@ -211,18 +214,122 @@ export class Character {
   }
 }
 
-// Soft round shadow under the robot (cheap and looks good on any floor)
+// ---------------------------------------------------------------------------
+// Make the low-poly robot look like a polished, glossy toy:
+// smoother surfaces, painted clear-coat body, brushed metal joints, glassy eyes
+// ---------------------------------------------------------------------------
+const LOOKS = {
+  Main: { color: 0xe07b10, roughness: 0.38, metalness: 0.0, clearcoat: 0.8, clearcoatRoughness: 0.15 },
+  Grey: { color: 0x8d939c, roughness: 0.32, metalness: 0.85, clearcoat: 0.2, clearcoatRoughness: 0.3 },
+  Black: { color: 0x0b0d12, roughness: 0.08, metalness: 0.0, clearcoat: 1, clearcoatRoughness: 0.03 },
+};
+
+function upgradeLook(model) {
+  const made = new Map();
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+
+    // Smooth the faceted look but keep sharp edges (crease angle 80 deg)
+    if (!o.geometry.userData.smoothed) {
+      const g = smoothNormals(o.geometry, THREE.MathUtils.degToRad(80));
+      g.userData.smoothed = true;
+      o.geometry = g;
+    }
+
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const upgraded = mats.map((m) => {
+      if (made.has(m)) return made.get(m);
+      const look = LOOKS[m.name] || {};
+      const pm = new THREE.MeshPhysicalMaterial({
+        name: m.name,
+        color: look.color ?? m.color,
+        map: m.map || null,
+        roughness: look.roughness ?? 0.5,
+        metalness: look.metalness ?? 0,
+        clearcoat: look.clearcoat ?? 0,
+        clearcoatRoughness: look.clearcoatRoughness ?? 0.2,
+      });
+      made.set(m, pm);
+      return pm;
+    });
+    o.material = Array.isArray(o.material) ? upgraded : upgraded[0];
+  });
+}
+
+// Recompute normals so faces meeting at less than `creaseAngle` share a smooth normal.
+// Vertices are matched by position (the model stores each face's corners separately).
+function smoothNormals(geometry, creaseAngle) {
+  const g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  const pos = g.attributes.position;
+  const count = pos.count;
+  const cosCrease = Math.cos(creaseAngle);
+
+  // Face normals (area-weighted: cross product length = 2x area)
+  const fn = [];
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1);
+    c.fromBufferAttribute(pos, i + 2);
+    const n = new THREE.Vector3().subVectors(c, b).cross(new THREE.Vector3().subVectors(a, b));
+    fn.push(n, n, n);
+  }
+
+  // Group vertices that sit at the same position
+  const groups = new Map();
+  const key = (i) => `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
+  for (let i = 0; i < count; i++) {
+    const k = key(i);
+    let list = groups.get(k);
+    if (!list) groups.set(k, (list = []));
+    list.push(i);
+  }
+
+  const normals = new Float32Array(count * 3);
+  const sum = new THREE.Vector3(), mine = new THREE.Vector3(), other = new THREE.Vector3();
+  for (const list of groups.values()) {
+    for (const i of list) {
+      mine.copy(fn[i]).normalize();
+      sum.set(0, 0, 0);
+      for (const j of list) {
+        other.copy(fn[j]).normalize();
+        if (mine.dot(other) >= cosCrease) sum.add(fn[j]);
+      }
+      sum.normalize();
+      normals[i * 3] = sum.x;
+      normals[i * 3 + 1] = sum.y;
+      normals[i * 3 + 2] = sum.z;
+    }
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  return g;
+}
+
+// Invisible floor that only shows the robot's real shadow
+function makeShadowCatcher() {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(3, 3).rotateX(-Math.PI / 2),
+    new THREE.ShadowMaterial({ opacity: 0.32, depthWrite: false })
+  );
+  mesh.position.y = 0.001;
+  mesh.receiveShadow = true;
+  mesh.raycast = () => {};
+  return mesh;
+}
+
+// Soft round contact shadow right under the robot
 function makeBlobShadow() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d');
   const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
   grad.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 128, 128);
   const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(HEIGHT * 0.9, HEIGHT * 0.9).rotateX(-Math.PI / 2),
+    new THREE.PlaneGeometry(HEIGHT * 0.7, HEIGHT * 0.7).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false })
   );
   mesh.position.y = 0.002;
