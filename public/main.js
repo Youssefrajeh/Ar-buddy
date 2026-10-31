@@ -99,6 +99,12 @@ let busy = false;
 
 voice.onSpeakStart = () => buddy && (buddy.talking = true);
 voice.onSpeakEnd = () => buddy && (buddy.talking = false);
+voice.onError = (err) => {
+  console.warn('Speech error:', err);
+  setStatus(err === 'not-allowed'
+    ? 'Sound blocked: tap the mic once to enable it'
+    : 'No sound: turn up media volume and turn off silent mode');
+};
 
 let bubbleTimer;
 function showBubble(text, fromYou = false) {
@@ -150,6 +156,7 @@ function doAction(action) {
 
 // Mic button: tap to talk, tap again to stop
 ui.mic.addEventListener('click', () => {
+  voice.unlock();
   if (busy) return;
   if (!voice.canListen) {
     ui.textInput.focus();
@@ -175,6 +182,7 @@ ui.mic.addEventListener('click', () => {
 
 ui.textForm.addEventListener('submit', (e) => {
   e.preventDefault();
+  voice.unlock();
   const text = ui.textInput.value;
   ui.textInput.value = '';
   ui.textInput.blur();
@@ -358,13 +366,17 @@ ui.exit.addEventListener('click', () => {
   else stopPreview();
 });
 
-ui.startAR.addEventListener('click', () =>
-  startAR().catch((err) => {
+ui.startAR.addEventListener('click', () => {
+  voice.unlock(); // must happen during the tap, before any await
+  return startAR().catch((err) => {
     console.error(err);
     ui.supportNote.textContent = 'Could not start AR: ' + err.message;
-  })
-);
-ui.startPreview.addEventListener('click', () => startPreview());
+  });
+});
+ui.startPreview.addEventListener('click', () => {
+  voice.unlock();
+  startPreview();
+});
 
 async function checkSupport() {
   let arOK = false;
